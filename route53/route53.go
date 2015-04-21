@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
-	"github.com/crowdmob/goamz/aws"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
+
+	"github.com/crowdmob/goamz/aws"
 )
 
 type Route53 struct {
@@ -55,6 +57,17 @@ type ListHostedZonesResponse struct {
 	IsTruncated bool
 	NextMarker  string
 	MaxItems    int
+}
+
+type ListHostedZonesByNameResponse struct {
+	XMLName          xml.Name     `xml:"ListHostedZonesByNameResponse"`
+	HostedZones      []HostedZone `xml:"HostedZones>HostedZone"`
+	DNSName          string
+	HostedZoneId     string
+	NextDNSName      string
+	NextHostedZoneId string
+	IsTruncated      bool
+	MaxItems         int
 }
 
 // Structs for Creating a New Host
@@ -314,6 +327,26 @@ func (r *Route53) ListHostedZones(marker string, maxItems int) (result *ListHost
 	}
 
 	result = new(ListHostedZonesResponse)
+	err = r.query("GET", path, nil, result)
+
+	return
+}
+
+// ListedHostedZonesByName fetches a collection of HostedZones through the AWS Route53 API ordered, and optionally filtered by, a DNS name
+func (r *Route53) ListHostedZonesByName(DNSName string, nextHostedZoneId string, maxItems int) (result *ListHostedZonesByNameResponse, err error) {
+	params := url.Values{}
+	if DNSName != "" {
+		params.Add("dnsname", DNSName)
+	}
+	if nextHostedZoneId != "" {
+		params.Add("hostedzoneid", nextHostedZoneId)
+	}
+	if maxItems != 0 {
+		params.Add("maxitems", strconv.FormatInt(maxItems, 10))
+	}
+	path := fmt.Sprintf("%s?%s", r.Endpoint, params.Encode())
+
+	result = new(ListHostedZonesByNameResponse)
 	err = r.query("GET", path, nil, result)
 
 	return
