@@ -23,7 +23,6 @@ const (
 	ApiVersion  = "2014-11-06"
 )
 
-// Factory for the route53 type
 func NewCloudFront(auth aws.Auth) (*CloudFront, error) {
 	signer := aws.NewV4Signer(auth, "cloudfront", aws.USEast)
 
