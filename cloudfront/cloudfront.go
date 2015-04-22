@@ -338,6 +338,71 @@ func (cf *CloudFront) generateSignature(policy []byte) (string, error) {
 	return encoded, nil
 }
 
+// Create a CloudFront distribution
+//
+// Usage:
+//	conf := cloudfront.DistributionConfig{
+//		Origins: cloudfront.Origins{
+//			cloudfront.Origin{
+//				Id:         "test",
+//				DomainName: "example.com",
+//				CustomOriginConfig: &cloudfront.CustomOriginConfig{
+//					HTTPPort:             80,
+//					HTTPSPort:            443,
+//					OriginProtocolPolicy: "http-only",
+//				},
+//			},
+//		},
+//
+//		DefaultCacheBehavior: cloudfront.CacheBehavior{
+//			TargetOriginId: "test",
+//			PathPattern:    "/test",
+//			ForwardedValues: cloudfront.ForwardedValues{
+//				QueryString: true,
+//				Cookies: cloudfront.Cookies{
+//					Forward: "whitelist",
+//					WhitelistedNames: cloudfront.Names{
+//						"cat",
+//						"dog",
+//					},
+//				},
+//				Headers: cloudfront.Names{
+//					"horse",
+//					"pig",
+//				},
+//			},
+//			ViewerProtocolPolicy: "allow-all",
+//			MinTTL:               300,
+//			AllowedMethods: cloudfront.AllowedMethods{
+//				Allowed: []string{"GET", "HEAD"},
+//				Cached:  []string{"GET", "HEAD"},
+//			},
+//		},
+//
+//		Restrictions: cloudfront.GeoRestriction{
+//			RestrictionType: "blacklist",
+//			Locations: []string{
+//				"CA",
+//				"DE",
+//			},
+//		},
+//
+//		CustomErrorResponses: cloudfront.CustomErrorResponses{
+//			cloudfront.CustomErrorResponse{
+//				ErrorCode:        404,
+//				ResponseCode:     403,
+//				ResponsePagePath: "/index.html",
+//			},
+//		},
+//
+//		PriceClass: "PriceClass_All",
+//	}
+//
+//	cf, _ := cloudfront.NewCloudFront(aws.Auth{
+//		AccessKey: // ...
+//		SecretKey: // ...
+//	})
+//	cf.CreateDistribution(conf)
 func (cf *CloudFront) CreateDistribution(config DistributionConfig) error {
 	if config.CallerReference == "" {
 		config.CallerReference = strconv.FormatInt(time.Now().Unix(), 10)
