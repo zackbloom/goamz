@@ -1,23 +1,271 @@
 package cloudfront
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
-	"github.com/crowdmob/goamz/aws"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/crowdmob/goamz/aws"
 )
 
+const (
+	ServiceName = "cloudfront"
+	ApiVersion  = "2014-11-06"
+)
+
+// Factory for the route53 type
+func NewCloudFront(auth aws.Auth) (*CloudFront, error) {
+	signer := aws.NewV4Signer(auth, "cloudfront", aws.USEast)
+
+	return &CloudFront{
+		Signer: signer,
+		Auth:   auth,
+	}, nil
+}
+
 type CloudFront struct {
+	Signer    *aws.V4Signer
+	Auth      aws.Auth
 	BaseURL   string
 	keyPairId string
 	key       *rsa.PrivateKey
+}
+
+type DistributionConfig struct {
+	XMLName              xml.Name `xml:"DistributionConfig"`
+	CallerReference      string
+	Aliases              Aliases
+	DefaultRootObject    string
+	Origins              Origins
+	DefaultCacheBehavior CacheBehavior
+	Comment              string
+	CacheBehaviors       CacheBehaviors
+	CustomErrorResponses CustomErrorResponses
+	Restrictions         GeoRestriction `xml:"Restrictions>GeoRestriction"`
+	Logging              Logging
+	ViewerCertificate    *ViewerCertificate `xml:",omitempty"`
+	PriceClass           string
+	Enabled              bool
+}
+
+type Aliases []string
+
+type EncodedAliases struct {
+	Quantity int
+	Items    []string `xml:"Items>CNAME"`
+}
+
+func (a Aliases) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedAliases{
+		Quantity: len(a),
+		Items:    []string(a),
+	}
+
+	return e.EncodeElement(enc, start)
+}
+
+type CustomErrorResponses []CustomErrorResponse
+
+type EncodedCustomErrorResponses struct {
+	Quantity int
+	Items    []CustomErrorResponse `xml:"Items>CustomErrorResponse"`
+}
+
+func (a CustomErrorResponses) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedCustomErrorResponses{
+		Quantity: len(a),
+		Items:    []CustomErrorResponse(a),
+	}
+
+	return e.EncodeElement(enc, start)
+}
+
+type CacheBehaviors []CacheBehavior
+
+type EncodedCacheBehaviors struct {
+	Quantity int
+	Items    []CacheBehavior `xml:"Items>CacheBehavior"`
+}
+
+func (a CacheBehaviors) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedCacheBehaviors{
+		Quantity: len(a),
+		Items:    []CacheBehavior(a),
+	}
+
+	return e.EncodeElement(enc, start)
+}
+
+type Logging struct {
+	Enabled        bool
+	IncludeCookies bool
+	Bucket         string
+	Prefix         string
+}
+
+type ViewerCertificate struct {
+	IAMCertificateId             string `xml:",omitempty"`
+	CloudFrontDefaultCertificate bool   `xml:",omitempty"`
+	SSLSupportMethod             string
+	MinimumProtocolVersion       string
+}
+
+type GeoRestriction struct {
+	RestrictionType string
+	Locations       []string
+}
+
+type EncodedGeoRestriction struct {
+	RestrictionType string
+	Quantity        int
+	Locations       []string `xml:"Items>Location"`
+}
+
+func (a GeoRestriction) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedGeoRestriction{
+		RestrictionType: a.RestrictionType,
+		Quantity:        len(a.Locations),
+		Locations:       []string(a.Locations),
+	}
+
+	return e.EncodeElement(enc, start)
+}
+
+type CustomErrorResponse struct {
+	XMLName            xml.Name `xml:"CustomErrorResponse"`
+	ErrorCode          int
+	ResponsePagePath   string
+	ResponseCode       int
+	ErrorCachingMinTTL int
+}
+
+type Origin struct {
+	XMLName            xml.Name `xml:"Origin"`
+	Id                 string
+	DomainName         string
+	OriginPath         string              `xml:"OriginPath,omitempty"`
+	S3OriginConfig     *S3OriginConfig     `xml:",omitempty"`
+	CustomOriginConfig *CustomOriginConfig `xml:",omitempty"`
+}
+
+type S3OriginConfig struct {
+	OriginAccessIdentity string
+}
+
+type CustomOriginConfig struct {
+	HTTPPort             int
+	HTTPSPort            int
+	OriginProtocolPolicy string
+}
+
+type Origins []Origin
+
+type EncodedOrigins struct {
+	Quantity int
+	Items    []Origin `xml:"Items>Origin"`
+}
+
+func (o Origins) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedOrigins{
+		Quantity: len(o),
+		Items:    []Origin(o),
+	}
+
+	return e.EncodeElement(enc, start)
+}
+
+type CacheBehavior struct {
+	TargetOriginId       string
+	PathPattern          string `xml:",omitempty"`
+	ForwardedValues      ForwardedValues
+	TrustedSigners       TrustedSigners
+	ViewerProtocolPolicy string
+	MinTTL               int
+	AllowedMethods       AllowedMethods
+	SmoothStreaming      bool
+}
+
+type ForwardedValues struct {
+	QueryString bool
+	Cookies     Cookies
+	Headers     Names
+}
+
+type Cookies struct {
+	Forward          string
+	WhitelistedNames Names
+}
+
+type Names []string
+
+type EncodedNames struct {
+	Quantity int
+	Items    []string `xml:"Items>Name"`
+}
+
+func (w Names) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedNames{
+		Quantity: len(w),
+		Items:    []string(w),
+	}
+
+	return e.EncodeElement(enc, start)
+}
+
+type ItemsList []string
+
+type TrustedSigners struct {
+	Enabled           bool
+	AWSAccountNumbers []string
+}
+
+type EncodedTrustedSigners struct {
+	Enabled  bool
+	Quantity int
+	Items    []string `xml:"Items>AWSAccountNumber"`
+}
+
+func (n TrustedSigners) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedTrustedSigners{
+		Enabled:  n.Enabled,
+		Quantity: len(n.AWSAccountNumbers),
+		Items:    n.AWSAccountNumbers,
+	}
+
+	return e.EncodeElement(enc, start)
+}
+
+type AllowedMethods struct {
+	Allowed []string `xml:"Items"`
+	Cached  []string `xml:"CachedMethods>Items,omitempty"`
+}
+
+type EncodedAllowedMethods struct {
+	AllowedQuantity int      `xml:"Quantity"`
+	Allowed         []string `xml:"Items>Method"`
+	CachedQuantity  int      `xml:"CachedMethods>Quantity"`
+	Cached          []string `xml:"CachedMethods>Items>Method"`
+}
+
+func (n AllowedMethods) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	enc := EncodedAllowedMethods{
+		AllowedQuantity: len(n.Allowed),
+		Allowed:         n.Allowed,
+		CachedQuantity:  len(n.Cached),
+		Cached:          n.Cached,
+	}
+
+	return e.EncodeElement(enc, start)
 }
 
 var base64Replacer = strings.NewReplacer("=", "_", "+", "-", "/", "~")
@@ -88,6 +336,45 @@ func (cf *CloudFront) generateSignature(policy []byte) (string, error) {
 	encoded := base64Replacer.Replace(base64.StdEncoding.EncodeToString(signed))
 
 	return encoded, nil
+}
+
+func (cf *CloudFront) CreateDistribution(config DistributionConfig) error {
+	if config.CallerReference == "" {
+		config.CallerReference = strconv.FormatInt(time.Now().Unix(), 10)
+	}
+
+	body, err := xml.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	client := http.Client{}
+	req, err := http.NewRequest("POST", "https://"+ServiceName+".amazonaws.com/"+ApiVersion+"/distribution", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	cf.Signer.Sign(req)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		errors := aws.ErrorResponse{}
+		xml.NewDecoder(resp.Body).Decode(&errors)
+
+		err := errors.Errors
+		err.RequestId = errors.RequestId
+		err.StatusCode = resp.StatusCode
+		if err.Message == "" {
+			err.Message = resp.Status
+		}
+		return &err
+	}
+	return nil
 }
 
 // Creates a signed url using RSAwithSHA1 as specified by
