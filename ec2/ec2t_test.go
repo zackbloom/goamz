@@ -2,10 +2,10 @@ package ec2_test
 
 import (
 	"fmt"
-	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/ec2"
-	"github.com/crowdmob/goamz/ec2/ec2test"
-	"github.com/crowdmob/goamz/testutil"
+	"github.com/zackbloom/goamz/aws"
+	"github.com/zackbloom/goamz/ec2"
+	"github.com/zackbloom/goamz/ec2/ec2test"
+	"github.com/zackbloom/goamz/testutil"
 	"gopkg.in/check.v1"
 	"regexp"
 	"sort"

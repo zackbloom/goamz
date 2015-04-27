@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/crowdmob/goamz/aws"
+	"github.com/zackbloom/goamz/aws"
 )
 
 type Route53 struct {

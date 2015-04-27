@@ -1,9 +1,9 @@
 package sns_test
 
 import (
-	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/sns"
-	"github.com/crowdmob/goamz/testutil"
+	"github.com/zackbloom/goamz/aws"
+	"github.com/zackbloom/goamz/sns"
+	"github.com/zackbloom/goamz/testutil"
 	"gopkg.in/check.v1"
 	"testing"
 )
