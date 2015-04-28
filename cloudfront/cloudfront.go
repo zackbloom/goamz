@@ -51,7 +51,7 @@ type DistributionConfig struct {
 	Comment              string
 	CacheBehaviors       CacheBehaviors
 	CustomErrorResponses CustomErrorResponses
-	Restrictions         GeoRestriction `xml:"Restrictions>GeoRestriction"`
+	Restrictions         *GeoRestriction `xml:"Restrictions>GeoRestriction,omitempty"`
 	Logging              Logging
 	ViewerCertificate    *ViewerCertificate `xml:",omitempty"`
 	PriceClass           string
@@ -59,7 +59,7 @@ type DistributionConfig struct {
 }
 
 type DistributionSummary struct {
-	XMLName xml.Name `xml:"DistributionSummary"`
+	XMLName xml.Name `xml:"Distribution"`
 	DistributionConfig
 	DomainName       string
 	Status           string
@@ -262,13 +262,25 @@ type CacheBehavior struct {
 
 type ForwardedValues struct {
 	QueryString bool
-	Cookies     Cookies
+	Cookies     *Cookies
 	Headers     Names
 }
 
 type Cookies struct {
 	Forward          string
 	WhitelistedNames Names
+}
+
+var CookiesDefault = Cookies{
+	Forward:          "none",
+	WhitelistedNames: Names{},
+}
+
+func cacheBehaviorDefault(cache *CacheBehavior) {
+	if cache.ForwardedValues.Cookies == nil {
+		clone := CookiesDefault
+		cache.ForwardedValues.Cookies = &clone
+	}
 }
 
 type Names []string
@@ -510,6 +522,11 @@ func (cf *CloudFront) Create(config DistributionConfig) (summary DistributionSum
 		config.CallerReference = strconv.FormatInt(time.Now().Unix(), 10)
 	}
 
+	cacheBehaviorDefault(&config.DefaultCacheBehavior)
+	for i, _ := range config.CacheBehaviors {
+		cacheBehaviorDefault(&(config.CacheBehaviors[i]))
+	}
+
 	body, err := xml.Marshal(config)
 	if err != nil {
 		return
@@ -547,8 +564,13 @@ func (cf *CloudFront) Create(config DistributionConfig) (summary DistributionSum
 	return
 }
 
+type DistributionItem struct {
+	XMLName xml.Name `xml:"DistributionSummary"`
+	DistributionSummary
+}
+
 type DistributionsResp struct {
-	Items       []DistributionSummary `xml:"Items>DistributionSummary"`
+	Items       []DistributionItem `xml:"Items>DistributionSummary"`
 	IsTruncated bool
 	Marker      string
 
@@ -619,11 +641,11 @@ func (cf *CloudFront) FindDistributionByAlias(alias string) (dist *DistributionS
 			panic("More than 1000 CloudFront distributions in account, not all will be correctly searched")
 		}
 
-		var item DistributionSummary
+		var item DistributionItem
 		for _, item = range resp.Items {
 			for _, _alias := range item.Aliases {
 				if _alias == alias {
-					dist = &item
+					dist = &(item.DistributionSummary)
 					return
 				}
 			}
