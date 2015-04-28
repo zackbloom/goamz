@@ -59,6 +59,7 @@ type DistributionConfig struct {
 }
 
 type DistributionSummary struct {
+	XMLName xml.Name `xml:"DistributionSummary"`
 	DistributionConfig
 	DomainName       string
 	Status           string
@@ -82,6 +83,17 @@ func (a Aliases) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(enc, start)
 }
 
+func (n *Aliases) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedAliases{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	*n = enc.Items
+	return nil
+}
+
 type CustomErrorResponses []CustomErrorResponse
 
 type EncodedCustomErrorResponses struct {
@@ -98,6 +110,17 @@ func (a CustomErrorResponses) MarshalXML(e *xml.Encoder, start xml.StartElement)
 	return e.EncodeElement(enc, start)
 }
 
+func (n *CustomErrorResponses) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedCustomErrorResponses{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	*n = enc.Items
+	return nil
+}
+
 type CacheBehaviors []CacheBehavior
 
 type EncodedCacheBehaviors struct {
@@ -112,6 +135,17 @@ func (a CacheBehaviors) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 	}
 
 	return e.EncodeElement(enc, start)
+}
+
+func (n *CacheBehaviors) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedCacheBehaviors{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	*n = enc.Items
+	return nil
 }
 
 type Logging struct {
@@ -147,6 +181,18 @@ func (a GeoRestriction) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 	}
 
 	return e.EncodeElement(enc, start)
+}
+
+func (n *GeoRestriction) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedGeoRestriction{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	n.Locations = enc.Locations
+	n.RestrictionType = enc.RestrictionType
+	return nil
 }
 
 type CustomErrorResponse struct {
@@ -192,6 +238,17 @@ func (o Origins) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(enc, start)
 }
 
+func (o *Origins) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedOrigins{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	*o = Origins(enc.Items)
+	return nil
+}
+
 type CacheBehavior struct {
 	TargetOriginId       string
 	PathPattern          string `xml:",omitempty"`
@@ -230,6 +287,17 @@ func (w Names) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(enc, start)
 }
 
+func (n *Names) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedNames{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	*n = Names(enc.Items)
+	return nil
+}
+
 type ItemsList []string
 
 type TrustedSigners struct {
@@ -253,6 +321,18 @@ func (n TrustedSigners) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 	return e.EncodeElement(enc, start)
 }
 
+func (n *TrustedSigners) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedTrustedSigners{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	n.AWSAccountNumbers = enc.Items
+	n.Enabled = enc.Enabled
+	return nil
+}
+
 type AllowedMethods struct {
 	Allowed []string `xml:"Items"`
 	Cached  []string `xml:"CachedMethods>Items,omitempty"`
@@ -274,6 +354,18 @@ func (n AllowedMethods) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 	}
 
 	return e.EncodeElement(enc, start)
+}
+
+func (n *AllowedMethods) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	enc := EncodedAllowedMethods{}
+	err := d.DecodeElement(&enc, &start)
+	if err != nil {
+		return err
+	}
+
+	n.Allowed = enc.Allowed
+	n.Cached = enc.Cached
+	return nil
 }
 
 var base64Replacer = strings.NewReplacer("=", "_", "+", "-", "/", "~")
@@ -408,7 +500,7 @@ func (cf *CloudFront) generateSignature(policy []byte) (string, error) {
 //		PriceClass: "PriceClass_All",
 //	}
 //
-//	cf, _ := cloudfront.NewCloudFront(aws.Auth{
+//	cf := cloudfront.NewCloudFront(aws.Auth{
 //		AccessKey: // ...
 //		SecretKey: // ...
 //	})
@@ -507,6 +599,7 @@ func (cf *CloudFront) List(marker string, max int) (items *DistributionsResp, er
 		}
 		err = &errors.Errors
 	} else {
+		items = &DistributionsResp{}
 		err = xml.NewDecoder(resp.Body).Decode(items)
 	}
 
