@@ -23,13 +23,14 @@ const (
 	ApiVersion  = "2014-11-06"
 )
 
-func NewCloudFront(auth aws.Auth) (*CloudFront, error) {
+// TODO Reconcile with 'New' fn below
+func NewCloudFront(auth aws.Auth) *CloudFront {
 	signer := aws.NewV4Signer(auth, "cloudfront", aws.USEast)
 
 	return &CloudFront{
 		Signer: signer,
 		Auth:   auth,
-	}, nil
+	}
 }
 
 type CloudFront struct {
@@ -55,6 +56,14 @@ type DistributionConfig struct {
 	ViewerCertificate    *ViewerCertificate `xml:",omitempty"`
 	PriceClass           string
 	Enabled              bool
+}
+
+type DistributionSummary struct {
+	DistributionConfig
+	DomainName       string
+	Status           string
+	Id               string
+	LastModifiedTime time.Time
 }
 
 type Aliases []string
@@ -341,6 +350,8 @@ func (cf *CloudFront) generateSignature(policy []byte) (string, error) {
 //
 // Usage:
 //	conf := cloudfront.DistributionConfig{
+//    Enabled: true,
+//
 //		Origins: cloudfront.Origins{
 //			cloudfront.Origin{
 //				Id:         "test",
@@ -402,27 +413,27 @@ func (cf *CloudFront) generateSignature(policy []byte) (string, error) {
 //		SecretKey: // ...
 //	})
 //	cf.CreateDistribution(conf)
-func (cf *CloudFront) CreateDistribution(config DistributionConfig) error {
+func (cf *CloudFront) Create(config DistributionConfig) (summary DistributionSummary, err error) {
 	if config.CallerReference == "" {
 		config.CallerReference = strconv.FormatInt(time.Now().Unix(), 10)
 	}
 
 	body, err := xml.Marshal(config)
 	if err != nil {
-		return err
+		return
 	}
 
 	client := http.Client{}
 	req, err := http.NewRequest("POST", "https://"+ServiceName+".amazonaws.com/"+ApiVersion+"/distribution", bytes.NewReader(body))
 	if err != nil {
-		return err
+		return
 	}
 
 	cf.Signer.Sign(req)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return
 	}
 	defer resp.Body.Close()
 
@@ -436,9 +447,102 @@ func (cf *CloudFront) CreateDistribution(config DistributionConfig) error {
 		if err.Message == "" {
 			err.Message = resp.Status
 		}
-		return &err
+		return summary, &err
+	} else {
+		err = xml.NewDecoder(resp.Body).Decode(&summary)
 	}
-	return nil
+
+	return
+}
+
+type DistributionsResp struct {
+	Items       []DistributionSummary `xml:"Items>DistributionSummary"`
+	IsTruncated bool
+	Marker      string
+
+	// Use this to get the next page of results if IsTruncated is true
+	NextMarker string
+
+	// Total number in account
+	Quantity int
+	MaxItems int
+}
+
+// Marker is an optional pointer to the NextMarker from the previous page of results
+// Max is the maximum number of results to return, max 100
+func (cf *CloudFront) List(marker string, max int) (items *DistributionsResp, err error) {
+	params := url.Values{
+		"MaxItems": []string{strconv.FormatInt(int64(max), 10)},
+	}
+
+	if marker != "" {
+		params["Marker"] = []string{marker}
+	}
+
+	uri, _ := url.Parse("https://" + ServiceName + ".amazonaws.com/" + ApiVersion + "/distribution")
+	uri.RawQuery = params.Encode()
+
+	client := http.Client{}
+	req, err := http.NewRequest("GET", uri.String(), nil)
+	if err != nil {
+		return
+	}
+
+	cf.Signer.Sign(req)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		errors := aws.ErrorResponse{}
+		xml.NewDecoder(resp.Body).Decode(&errors)
+
+		errors.Errors.RequestId = errors.RequestId
+		errors.Errors.StatusCode = resp.StatusCode
+		if errors.Errors.Message == "" {
+			errors.Errors.Message = resp.Status
+		}
+		err = &errors.Errors
+	} else {
+		err = xml.NewDecoder(resp.Body).Decode(items)
+	}
+
+	return
+}
+
+func (cf *CloudFront) FindDistributionByAlias(alias string) (dist *DistributionSummary, err error) {
+	marker := ""
+	for page := 0; page < 10; page++ {
+		var resp *DistributionsResp
+		resp, err = cf.List(marker, 100)
+		if err != nil {
+			return
+		}
+
+		if resp.Quantity > 1000 {
+			panic("More than 1000 CloudFront distributions in account, not all will be correctly searched")
+		}
+
+		var item DistributionSummary
+		for _, item = range resp.Items {
+			for _, _alias := range item.Aliases {
+				if _alias == alias {
+					dist = &item
+					return
+				}
+			}
+		}
+
+		marker = resp.NextMarker
+		if !resp.IsTruncated {
+			break
+		}
+	}
+
+	return
 }
 
 // Creates a signed url using RSAwithSHA1 as specified by

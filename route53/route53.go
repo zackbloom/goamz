@@ -342,7 +342,7 @@ func (r *Route53) ListHostedZonesByName(DNSName string, nextHostedZoneId string,
 		params.Add("hostedzoneid", nextHostedZoneId)
 	}
 	if maxItems != 0 {
-		params.Add("maxitems", strconv.FormatInt(maxItems, 10))
+		params.Add("maxitems", strconv.FormatInt(int64(maxItems), 10))
 	}
 	path := fmt.Sprintf("%s?%s", r.Endpoint, params.Encode())
 
